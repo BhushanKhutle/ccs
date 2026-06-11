@@ -109,6 +109,29 @@ export default function TrackPage() {
               )}
             </div>
 
+            {/* OTP Box — shown when order is out for delivery */}
+            {order.status === 'out_for_delivery' && order.otp && (
+              <div className="bg-white border-2 border-plum rounded-2xl p-5 animate-slideUp">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xl">🔐</span>
+                  <div>
+                    <h3 className="font-semibold text-ink text-sm">Your Delivery OTP</h3>
+                    <p className="text-xs text-muted">Share this with the delivery agent to confirm delivery</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-center gap-3 mb-3">
+                  {String(order.otp).split('').map((digit, i) => (
+                    <div key={i} className="w-14 h-16 bg-plum rounded-2xl flex items-center justify-center text-white text-3xl font-bold shadow-lg">
+                      {digit}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-center text-xs text-muted bg-surface rounded-xl py-2 px-3">
+                  🚚 Your order is on its way! Agent will ask for this OTP on arrival.
+                </p>
+              </div>
+            )}
+
             {/* Progress tracker */}
             {!isCancelled && (
               <div className="bg-white border border-border rounded-2xl p-5 shadow-sm">

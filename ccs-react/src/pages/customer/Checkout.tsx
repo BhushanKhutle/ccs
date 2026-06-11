@@ -4,6 +4,7 @@ import { useCartStore } from '@/store/cart'
 import { useAuthStore } from '@/store/auth'
 import { ordersApi, couponsApi, deliveryApi } from '@/lib/api'
 import { Button, Input, Alert, Spinner, PageHeader } from '@/components/ui'
+import { useRazorpay } from '@/hooks/useRazorpay'
 import { formatPrice, toArray } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import { Tag, MapPin, Clock, CreditCard, CheckCircle2, ChevronRight, Trash2 } from 'lucide-react'
@@ -26,6 +27,7 @@ export default function CheckoutPage() {
   const [city,     setCity]    = useState('')
   const [pincode,  setPincode] = useState('')
   const [slot,     setSlot]    = useState('')
+  const [slotCharge, setSlotCharge] = useState(0)
   const [payment,  setPayment] = useState('Cash on Delivery')
   const [couponCode, setCouponCode] = useState('')
   const [couponMsg,  setCouponMsg]  = useState('')
@@ -33,6 +35,7 @@ export default function CheckoutPage() {
   const [error,    setError]   = useState('')
   const [loading,  setLoading] = useState(false)
   const [step,     setStep]    = useState(1)
+  const { pay } = useRazorpay()
 
   const { data: slotsData, isLoading: slotsLoading } = useQuery({
     queryKey: ['slots'],
@@ -44,7 +47,7 @@ export default function CheckoutPage() {
   const finalTotal = total()
   const discount   = subtotal - finalTotal
   const delivery   = finalTotal >= 799 ? 0 : 49
-  const grandTotal = finalTotal + delivery
+  const grandTotal = finalTotal + delivery + slotCharge
 
   async function applyCoupon() {
     if (!couponCode.trim()) return
@@ -86,8 +89,28 @@ export default function CheckoutPage() {
       }
       const res = await ordersApi.create(payload)
       const ord = res.data as any
+
+      // If online payment selected, open Razorpay
+      if (payment === 'UPI' || payment === 'Card') {
+        setLoading(false)
+        pay({
+          amount: grandTotal,
+          orderId: ord.id ?? ord.data?.id,
+          description: `Cake order - ${ord.orderNumber ?? ''}`,
+          onSuccess: (paymentId) => {
+            clearCart()
+            toast.success(`🎂 Order placed & payment done! ${ord.orderNumber ?? ''}`)
+            navigate('/track')
+          },
+          onFailure: () => {
+            setError('Payment failed. Your order is saved — try paying again from My Orders.')
+          },
+        })
+        return
+      }
+
       clearCart()
-      toast.success(`🎂 Order placed! ${ord.orderNumber}`)
+      toast.success(`🎂 Order placed! ${ord.orderNumber ?? ''}`)
       navigate('/track')
     } catch (e: any) { setError(e.message) }
     setLoading(false)
@@ -157,9 +180,18 @@ export default function CheckoutPage() {
                   {slotsLoading ? <Spinner size="sm" /> : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {slots.map((s: any) => (
-                        <button key={s.id} onClick={() => setSlot(s.label)}
-                          className={`py-3 px-3 rounded-xl text-sm border-2 font-medium transition-all duration-200 ${slot === s.label ? 'bg-plum text-white border-plum shadow-sm' : 'border-border text-muted hover:border-plum-mid hover:text-plum hover:bg-plum-light'}`}>
+                        <button key={s.id}
+                          disabled={!s.available}
+                          onClick={() => { if (s.available) { setSlot(s.label); setSlotCharge(Number(s.charge ?? 0)) } }}
+                          className={`py-3 px-3 rounded-xl text-sm border-2 font-medium transition-all duration-200
+                            ${!s.available ? 'opacity-40 cursor-not-allowed border-border text-hint bg-surface' :
+                              slot === s.label ? 'bg-plum text-white border-plum shadow-sm' :
+                              'border-border text-muted hover:border-plum-mid hover:text-plum hover:bg-plum-light'}`}>
                           🕐 {s.label}
+                          {s.charge > 0
+                            ? <span className="block text-xs mt-0.5 opacity-80">+₹{s.charge}</span>
+                            : <span className="block text-xs mt-0.5 opacity-60">{s.available ? 'Free' : 'Passed'}</span>
+                          }
                         </button>
                       ))}
                     </div>
@@ -260,6 +292,7 @@ export default function CheckoutPage() {
                 <div className="flex justify-between text-muted"><span>Subtotal</span><span className="text-ink">{formatPrice(subtotal)}</span></div>
                 {discount > 0 && <div className="flex justify-between"><span className="text-muted">Discount</span><span className="text-ccs-green font-medium">−{formatPrice(discount)}</span></div>}
                 <div className="flex justify-between text-muted"><span>Delivery</span><span className={delivery === 0 ? 'text-ccs-green font-medium' : 'text-ink'}>{delivery === 0 ? '🚚 FREE' : formatPrice(delivery)}</span></div>
+              {slotCharge > 0 && <div className="flex justify-between text-muted"><span>Slot charge</span><span className="text-ink">+{formatPrice(slotCharge)}</span></div>}
                 <div className="flex justify-between font-bold text-base border-t border-border pt-2">
                   <span>Total</span><span className="text-plum text-lg">{formatPrice(grandTotal)}</span>
                 </div>

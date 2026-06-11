@@ -5,7 +5,8 @@ import { ordersApi, usersApi } from '@/lib/api'
 import { Order, OrderStatus } from '@/lib/types'
 import { Toggle, Modal, Input, Button, Alert } from '@/components/ui'
 import { toArray, formatPrice } from '@/lib/utils'
-import { LogOut, ArrowLeftRight, Key, RefreshCw, Phone, ChefHat, Clock, CheckCircle2, Package } from 'lucide-react'
+import { LogOut, ArrowLeftRight, Key, RefreshCw, Phone, ChefHat, Clock, CheckCircle2, Package, Wifi, WifiOff } from 'lucide-react'
+import { useOrderSocket } from '@/hooks/useOrderSocket'
 import toast from 'react-hot-toast'
 
 type ChefTab = 'new' | 'preparing' | 'ready' | 'done'
@@ -34,6 +35,18 @@ export default function ChefPortal() {
   const [pwdLoading,  setPwdLoading]  = useState(false)
   const [pwdError,    setPwdError]    = useState('')
   const countRef = useRef<any>(null)
+  const [wsConnected, setWsConnected] = useState(false)
+
+  // WebSocket — real-time order updates
+  useOrderSocket({
+    onNewOrder: (order) => {
+      fetchOrders(true)
+    },
+    onOrderUpdate: (order) => {
+      fetchOrders(true)
+    },
+    enabled: true,
+  })
 
   const fetchOrders = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -178,6 +191,11 @@ export default function ChefPortal() {
           <p className="text-xs flex items-center gap-1.5" style={{ color: '#6b7280' }}>
             <Clock className="w-3 h-3" />
             Updated {lastUpdated} · Next in {countdown}s
+            <span className="flex items-center gap-1 ml-2 px-1.5 py-0.5 rounded-full text-[10px]"
+              style={{ background: wsConnected ? 'rgba(52,211,153,.15)' : 'rgba(107,114,128,.15)', color: wsConnected ? '#34d399' : '#9ca3af' }}>
+              {wsConnected ? <Wifi className="w-2.5 h-2.5" /> : <WifiOff className="w-2.5 h-2.5" />}
+              {wsConnected ? 'Live' : 'Polling'}
+            </span>
           </p>
           <button onClick={() => fetchOrders()} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors hover:bg-white/10" style={{ color: '#9ca3af' }}>
             <RefreshCw className="w-3 h-3" /> Refresh
@@ -246,10 +264,11 @@ function ChefOrderCard({ order: o, onStartPreparing, onMarkReady }: {
   }
 
   const timeAgo = () => {
-    const mins = Math.floor((Date.now() - new Date(o.createdAt).getTime()) / 60000)
-    if (mins < 1) return 'Just now'
-    if (mins < 60) return `${mins}m ago`
-    return `${Math.floor(mins/60)}h ago`
+    return new Date(o.createdAt).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit', month: 'short',
+      hour: '2-digit', minute: '2-digit', hour12: true,
+    })
   }
 
   return (

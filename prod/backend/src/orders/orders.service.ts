@@ -55,8 +55,22 @@ export class OrdersService {
     return o;
   }
 
-  async updateStatus(id: number, status: OrderStatus, note?: string): Promise<Order> {
+  async updateStatus(id: number, status: OrderStatus, note?: string, otp?: string): Promise<Order> {
     const order = await this.findOne(id);
+
+    // OTP validation — required when marking as delivered
+    if (status === OrderStatus.DELIVERED) {
+      if (order.status !== OrderStatus.OUT_FOR_DELIVERY) {
+        throw new BadRequestException('Order must be out for delivery before marking delivered');
+      }
+      if (!otp || otp.trim() === '') {
+        throw new BadRequestException('OTP is required to confirm delivery');
+      }
+      if (order.otp !== otp.trim()) {
+        throw new BadRequestException('Invalid OTP — please ask customer for the correct OTP');
+      }
+    }
+
     const history = Array.isArray(order.statusHistory) ? order.statusHistory : [];
     history.push({ status, timestamp: new Date(), note: note || `Status updated to ${status}` });
     await this.repo.update(id, { status, statusHistory: history });

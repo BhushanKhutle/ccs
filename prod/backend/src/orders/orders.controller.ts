@@ -9,7 +9,6 @@ import { OrderStatus } from './order.entity';
 export class OrdersController {
   constructor(private readonly svc: OrdersService) {}
 
-  // PUBLIC - no auth needed
   @Get('track/:orderNumber')
   track(@Param('orderNumber') orderNumber: string) {
     return this.svc.findByNumber(orderNumber);
@@ -45,8 +44,9 @@ export class OrdersController {
     @Param('id', ParseIntPipe) id: number,
     @Body('status') status: OrderStatus,
     @Body('note') note: string,
+    @Body('otp') otp: string,
   ) {
-    return this.svc.updateStatus(id, status, note);
+    return this.svc.updateStatus(id, status, note, otp);
   }
 
   @Post(':id/cancel')

@@ -5,7 +5,8 @@ import { ordersApi, usersApi } from '@/lib/api'
 import { Order, OrderStatus } from '@/lib/types'
 import { Toggle, Modal, Input, Button, Alert } from '@/components/ui'
 import { toArray, formatPrice } from '@/lib/utils'
-import { LogOut, ArrowLeftRight, Key, RefreshCw, Phone, MapPin, Navigation, Clock, CheckCircle2, Truck } from 'lucide-react'
+import { LogOut, ArrowLeftRight, Key, RefreshCw, Phone, MapPin, Navigation, Clock, CheckCircle2, Truck, Wifi, WifiOff } from 'lucide-react'
+import { useOrderSocket } from '@/hooks/useOrderSocket'
 import toast from 'react-hot-toast'
 
 type DvTab = 'ready' | 'transit' | 'done'
@@ -27,6 +28,14 @@ export default function DeliveryPortal() {
   const [pwdLoading,setPwdLoading]= useState(false)
   const [pwdError,  setPwdError]  = useState('')
   const countRef = useRef<any>(null)
+  const [wsConnected, setWsConnected] = useState(false)
+
+  // WebSocket — real-time delivery updates
+  useOrderSocket({
+    onOrderUpdate: (order) => { fetchOrders(true) },
+    onNewOrder:    (order) => { fetchOrders(true) },
+    enabled: true,
+  })
 
   const fetchOrders = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -69,10 +78,24 @@ export default function DeliveryPortal() {
   }
 
   async function confirmDelivery(id: number, otp: string) {
-    if (!otp || otp.length < 4) { toast.error('Enter the OTP from customer'); return }
+    if (!otp || otp.length < 4) { toast.error('Enter the 4-digit OTP from customer'); return }
     try {
-      await ordersApi.updateStatus(id, 'delivered')
-      toast.success('🎉 Delivery confirmed!')
+      // Send OTP to backend for validation
+      const token = localStorage.getItem('ccs-auth')
+        ? JSON.parse(localStorage.getItem('ccs-auth')!).state?.token
+        : ''
+      const res = await fetch(`/api/v1/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: 'delivered', otp }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        const msg = data?.message || data?.data?.message || 'Invalid OTP'
+        toast.error(`❌ ${msg}`)
+        return
+      }
+      toast.success('🎉 Delivery confirmed successfully!')
       fetchOrders(true)
     } catch (e: any) { toast.error(e.message) }
   }
@@ -179,6 +202,11 @@ export default function DeliveryPortal() {
         <div className="flex items-center justify-between px-1">
           <p className="text-xs flex items-center gap-1.5" style={{ color: '#64748b' }}>
             <Clock className="w-3 h-3" /> Updated {lastUpd} · Next in {countdown}s
+            <span className="flex items-center gap-1 ml-2 px-1.5 py-0.5 rounded-full text-[10px]"
+              style={{ background: wsConnected ? 'rgba(52,211,153,.15)' : 'rgba(107,114,128,.15)', color: wsConnected ? '#34d399' : '#9ca3af' }}>
+              {wsConnected ? <Wifi className="w-2.5 h-2.5" /> : <WifiOff className="w-2.5 h-2.5" />}
+              {wsConnected ? 'Live' : 'Polling'}
+            </span>
           </p>
           <button onClick={() => fetchOrders()} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg hover:bg-white/10 transition-colors" style={{ color: '#94a3b8' }}>
             <RefreshCw className="w-3 h-3" /> Refresh
@@ -248,10 +276,11 @@ function DeliveryOrderCard({ order: o, onAccept, onConfirm }: {
   }
 
   const timeAgo = () => {
-    const mins = Math.floor((Date.now() - new Date(o.createdAt).getTime()) / 60000)
-    if (mins < 1) return 'Just now'
-    if (mins < 60) return `${mins}m ago`
-    return `${Math.floor(mins/60)}h ${mins % 60}m ago`
+    return new Date(o.createdAt).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit', month: 'short',
+      hour: '2-digit', minute: '2-digit', hour12: true,
+    })
   }
 
   return (

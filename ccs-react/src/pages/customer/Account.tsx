@@ -120,6 +120,20 @@ export default function AccountPage() {
                       <span key={i}>{item.productName} ×{item.quantity}{i < (o.items?.length ?? 0) - 1 ? ',' : ''}</span>
                     ))}
                   </div>
+                  {/* OTP for out_for_delivery orders */}
+                  {o.status === 'out_for_delivery' && (o as any).otp && (
+                    <div className="mt-3 flex items-center gap-3 bg-plum-light border border-plum-mid rounded-xl px-4 py-3">
+                      <span className="text-lg">🔐</span>
+                      <div>
+                        <p className="text-xs text-muted font-medium">Delivery OTP — share with agent</p>
+                        <div className="flex gap-1.5 mt-1">
+                          {String((o as any).otp).split('').map((d, i) => (
+                            <span key={i} className="w-8 h-9 bg-plum text-white rounded-lg flex items-center justify-center text-lg font-bold">{d}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {!['delivered','cancelled'].includes(o.status) && (
                     <button onClick={() => navigate(`/track?q=${o.orderNumber}`)} className="flex items-center gap-1 text-xs text-plum font-medium mt-3 hover:underline">
                       <Package className="w-3 h-3" /> Track this order <ChevronRight className="w-3 h-3" />
