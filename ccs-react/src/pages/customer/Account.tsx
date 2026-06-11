@@ -135,7 +135,7 @@ export default function AccountPage() {
                     </div>
                   )}
                   {!['delivered','cancelled'].includes(o.status) && (
-                    <button onClick={() => navigate(`/track?q=${o.orderNumber}`)} className="flex items-center gap-1 text-xs text-plum font-medium mt-3 hover:underline">
+                    <button onClick={() => navigate(`/track?order=${o.orderNumber}`)} className="flex items-center gap-1 text-xs text-plum font-medium mt-3 hover:underline">
                       <Package className="w-3 h-3" /> Track this order <ChevronRight className="w-3 h-3" />
                     </button>
                   )}

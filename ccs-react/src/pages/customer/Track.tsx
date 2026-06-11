@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ordersApi } from '@/lib/api'
 import { Order } from '@/lib/types'
 import { Button, Alert, PageHeader } from '@/components/ui'
@@ -17,10 +18,29 @@ const STEPS = [
 
 export default function TrackPage() {
   const navigate  = useNavigate()
+  const [searchParams] = useSearchParams()
   const [query,   setQuery]   = useState('')
   const [order,   setOrder]   = useState<Order | null>(null)
   const [error,   setError]   = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Auto-search if order number passed in URL (?order=CCS-xxx)
+  useEffect(() => {
+    const orderNum = searchParams.get('order')
+    if (orderNum) {
+      setQuery(orderNum)
+      // Auto trigger search
+      setTimeout(async () => {
+        setLoading(true); setError(''); setOrder(null)
+        try {
+          const { ordersApi } = await import('@/lib/api')
+          const res = await ordersApi.track(orderNum)
+          setOrder(res.data as any)
+        } catch { setError('Order not found') }
+        setLoading(false)
+      }, 100)
+    }
+  }, [searchParams])
 
   async function track() {
     if (!query.trim()) { setError('Enter your order number'); return }
