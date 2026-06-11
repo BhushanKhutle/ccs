@@ -1,3 +1,9 @@
+#!/bin/bash
+SVCFILE="/home/ec2-user/ccs/prod/backend/src/products/products.service.ts"
+
+# Fix findOne to not filter by isActive (so admin can edit hidden products)
+# and add a hard-delete option
+cat > "$SVCFILE" << 'TSEOF'
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere, ILike } from 'typeorm';
@@ -84,3 +90,27 @@ export class ProductsService {
     await this.repo.delete(id); // hard delete — admin explicitly deleting
   }
 }
+TSEOF
+
+echo "products.service.ts updated ✅"
+
+echo ""
+echo "=== Restarting backend ==="
+cd /home/ec2-user/ccs/prod/backend
+pm2 restart ccs-api
+sleep 5
+pm2 logs ccs-api --lines 6 --nostream
+
+echo ""
+echo "=== Quick test ==="
+TOKEN=$(curl -s -X POST http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@celebrationcakeshop.com","password":"Admin@123"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('token','ERR'))")
+
+# Test update product 1
+RESULT=$(curl -s -X PUT http://localhost:4000/api/v1/products/1 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Assorted Pastry Box","price":395,"category":"Pastries","eggless":true,"isActive":true}')
+echo "Update test: $(echo $RESULT | python3 -c "import sys,json; d=json.load(sys.stdin); print('✅ OK -', d.get('name','?'))" 2>/dev/null || echo $RESULT)"

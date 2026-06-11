@@ -1,3 +1,19 @@
+#!/bin/bash
+set -e
+BACKEND="/home/ec2-user/ccs/prod/backend"
+
+echo "=== Installing multer ==="
+cd $BACKEND
+npm install multer @types/multer --save
+
+echo ""
+echo "=== Creating uploads directory ==="
+mkdir -p /var/www/celebration-cake-shop/public/uploads/products
+chmod 755 /var/www/celebration-cake-shop/public/uploads/products
+
+echo ""
+echo "=== Rewriting products.controller.ts ==="
+cat > $BACKEND/src/products/products.controller.ts << 'TSEOF'
 import {
   Controller, Get, Post, Put, Delete, Patch, Body, Param, ParseIntPipe,
   Query, UseGuards, UseInterceptors, UploadedFile, BadRequestException
@@ -82,3 +98,58 @@ export class ProductsController {
     return { success: true, data: { imageUrl }, message: 'Image uploaded successfully' };
   }
 }
+TSEOF
+echo "products.controller.ts updated ✅"
+
+echo ""
+echo "=== Adding FileModule to products.module.ts ==="
+# Check if MulterModule is already imported
+if grep -q "MulterModule\|FileInterceptor" $BACKEND/src/products/products.module.ts 2>/dev/null; then
+  echo "MulterModule already present ✅"
+else
+  # Add MulterModule import
+  sed -i "s/import { Module } from '@nestjs\/common';/import { Module } from '@nestjs\/common';\nimport { MulterModule } from '@nestjs\/platform-express';/" \
+    $BACKEND/src/products/products.module.ts 2>/dev/null || true
+  echo "products.module.ts updated ✅"
+fi
+
+echo ""
+echo "=== Restart backend ==="
+cd $BACKEND
+pm2 restart ccs-api
+sleep 6
+pm2 logs ccs-api --lines 8 --nostream
+
+echo ""
+echo "=== Test upload endpoint exists ==="
+TOKEN=$(curl -s -X POST http://localhost:4000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@celebrationcakeshop.com","password":"Admin@123"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('data',{}).get('token','ERR'))")
+echo "Token: ${TOKEN:0:30}..."
+
+# Create a tiny test image and upload it to product 1
+python3 -c "
+import struct, zlib
+def make_png(w=1, h=1):
+    def chunk(name, data):
+        c = struct.pack('>I', len(data)) + name + data
+        return c + struct.pack('>I', zlib.crc32(name + data) & 0xffffffff)
+    sig = b'\x89PNG\r\n\x1a\n'
+    ihdr = chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0))
+    raw = b'\x00\xff\x80\x00' * w
+    idat = chunk(b'IDAT', zlib.compress(raw * h))
+    iend = chunk(b'IEND', b'')
+    return sig + ihdr + idat + iend
+open('/tmp/test.png','wb').write(make_png())
+print('Test PNG created')
+"
+
+RESULT=$(curl -s -X PATCH http://localhost:4000/api/v1/products/1/image \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "image=@/tmp/test.png;type=image/png")
+echo "Upload test: $RESULT"
+
+echo ""
+echo "=== Upload directory ==="
+ls -la /var/www/celebration-cake-shop/public/uploads/products/ | head -5

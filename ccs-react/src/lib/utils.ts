@@ -62,3 +62,9 @@ export function toArray<T>(data: unknown): T[] {
   if (data && typeof data === 'object' && 'items' in data) return (data as any).items
   return []
 }
+
+export function getImageUrl(url?: string | null): string {
+  if (!url) return ''
+  if (url.startsWith('http')) return url
+  return url
+}

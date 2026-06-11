@@ -15,6 +15,10 @@ export default defineConfig({
         target: 'http://65.2.75.137:4000',
         changeOrigin: true,
       },
+      '/uploads': {
+        target: 'http://65.2.75.137:80',
+        changeOrigin: true,
+      },
     },
   },
   build: {
